@@ -3,6 +3,7 @@ import com.graphhopper.jsprit.core.algorithm.VehicleRoutingAlgorithm;
 import com.graphhopper.jsprit.core.algorithm.box.Jsprit;
 import com.graphhopper.jsprit.core.problem.Location;
 import com.graphhopper.jsprit.core.problem.VehicleRoutingProblem;
+import com.graphhopper.jsprit.core.problem.cost.VehicleRoutingTransportCosts;
 import com.graphhopper.jsprit.core.problem.job.Service;
 import com.graphhopper.jsprit.core.problem.job.Shipment;
 import com.graphhopper.jsprit.core.problem.solution.VehicleRoutingProblemSolution;
@@ -12,6 +13,7 @@ import com.graphhopper.jsprit.core.problem.vehicle.VehicleTypeImpl;
 import com.graphhopper.jsprit.core.reporting.SolutionPrinter;
 import com.graphhopper.jsprit.core.util.Solutions;
 import com.graphhopper.jsprit.core.util.VehicleRoutingTransportCostsMatrix;
+
 import org.json.*;
 
 import java.io.IOException;
@@ -30,6 +32,7 @@ public class HelloWorld {
     static JSONArray vehicles;
     static JSONArray locations;
     static VehicleRoutingProblem.Builder vrpBuilder;
+    static VehicleRoutingTransportCostsMatrix.Builder costMatrixBuilder;
 
     public static void main(String[] args) {
 
@@ -44,6 +47,9 @@ public class HelloWorld {
             vehicles = null;
             locations = null;
             vrpBuilder =  VehicleRoutingProblem.Builder.newInstance();
+            costMatrixBuilder = VehicleRoutingTransportCostsMatrix.Builder.newInstance(true);
+
+
 
             //getMatrix();
 
@@ -57,7 +63,8 @@ public class HelloWorld {
                 locations = responceObj.getJSONArray("locations");
                 createMatrix();
                 createJobs();
-                //createSolution();
+                createVehicles();
+                createSolution();
 
             } catch (JSONException e) {
                 // log or consume it some other way
@@ -68,25 +75,6 @@ public class HelloWorld {
 
     }
 
-    private static void createJobs() {
-        //////CONTINUE THIS
-        for (int j = 0 ; j < jobs.length(); j++) {
-            JSONObject job = jobs.getJSONObject(j);
-            String pickup_from = job.getString("pickup_from");
-            String delivery_to = job.getString("delivery_to");
-            String job_id = job.getString("job_id");
-            Shipment shipment = Shipment.Builder.newInstance(job_id)
-                    .setName("myShipment")
-                    .setPickupLocation(Location.newInstance(pickup_from))
-                    .setDeliveryLocation(Location.newInstance(delivery_to))
-                    .addSizeDimension(0,9)
-                    .addSizeDimension(1,50)
-                    .addRequiredSkill("loading bridge").addRequiredSkill("electric drill")
-                    .build();
-
-
-        }
-    }
 
     private static void createMatrix() {
         String coords_line = "";
@@ -126,7 +114,7 @@ public class HelloWorld {
 
     private static void createTimeMatrix(JSONObject matrix_obj) {
 
-        VehicleRoutingTransportCostsMatrix.Builder costMatrixBuilder = VehicleRoutingTransportCostsMatrix.Builder.newInstance(true);
+        //VehicleRoutingTransportCostsMatrix.Builder costMatrixBuilder = VehicleRoutingTransportCostsMatrix.Builder.newInstance(true);
 
         JSONArray durations = matrix_obj.getJSONArray("durations");
         for (int r = 0 ; r < durations.length(); r++) {
@@ -135,15 +123,23 @@ public class HelloWorld {
                 float matrix_cell_value = matrix_row.getFloat(c);
                 String row_num = String.valueOf(r);
                 String cell_num = String.valueOf(c);
-                costMatrixBuilder.addTransportTime(row_num, cell_num, matrix_cell_value);
+                //costMatrixBuilder.addTransportTime(row_num, cell_num, matrix_cell_value);
+
+                JSONObject loc_json_from = (JSONObject) locations.get(r);
+                String from_id = loc_json_from.getString("id");
+
+                JSONObject loc_json_to = (JSONObject) locations.get(c);
+                String to_id = loc_json_to.getString("id");
+
+                costMatrixBuilder.addTransportTime(from_id, to_id, matrix_cell_value);
+
+
                 //System.out.println("matrix_cell_value " + matrix_cell_value);
             }
         }
     }
 
     private static void createDistanceMatrix(JSONObject matrix_obj) {
-
-        VehicleRoutingTransportCostsMatrix.Builder costMatrixBuilder = VehicleRoutingTransportCostsMatrix.Builder.newInstance(true);
 
         JSONArray distances = matrix_obj.getJSONArray("distances");
         for (int r = 0 ; r < distances.length(); r++) {
@@ -152,19 +148,53 @@ public class HelloWorld {
                 float matrix_cell_value = matrix_row.getFloat(c);
                 String row_num = String.valueOf(r);
                 String cell_num = String.valueOf(c);
-                costMatrixBuilder.addTransportDistance(row_num, cell_num, matrix_cell_value);
-                //System.out.println("matrix_cell_value " + matrix_cell_value);
+
+
+                JSONObject loc_json_from = (JSONObject) locations.get(r);
+                String from_id = loc_json_from.getString("id");
+
+                JSONObject loc_json_to = (JSONObject) locations.get(c);
+                String to_id = loc_json_to.getString("id");
+
+                costMatrixBuilder.addTransportDistance(from_id, to_id, matrix_cell_value);
+
+                System.out.println("'" + from_id  + "' to '" + to_id   + "' = " + matrix_cell_value);
             }
         }
     }
 
-    private static void createSolution() {
+    private static void createJobs() {
+        for (int j = 0 ; j < jobs.length(); j++) {
+            JSONObject job = jobs.getJSONObject(j);
+            String pickup_from = job.getString("pickup_from");
+            String delivery_to = job.getString("delivery_to");
+            String job_id = String.valueOf(job.getInt("id"));
+            System.out.println("start shipment");
+            Shipment shipment = Shipment.Builder.newInstance(job_id)
+                    .setName("myShipment")
+                    .setPickupLocation(Location.newInstance(pickup_from))
+                    .setDeliveryLocation(Location.newInstance(delivery_to))
+                    .addSizeDimension(0,3)
+                    .addSizeDimension(1,7)
+                    //.addRequiredSkill("loading bridge").addRequiredSkill("electric drill")
+                    .build();
+            System.out.println("shipment builded");
+            System.out.println(job_id);
+            vrpBuilder.addJob(shipment);
+            System.out.println("shipment added");
+            System.out.println("#############");
 
+        }
+    }
+
+    private static void createVehicles() {
         for (int i = 0 ; i < vehicles.length(); i++) {
             JSONObject vehicle = vehicles.getJSONObject(i);
             addVehicle(vehicle);
         }
     }
+
+
 
     private static void addVehicle(JSONObject vehicle) {
 
@@ -176,83 +206,31 @@ public class HelloWorld {
                 .build();
         VehicleImpl new_vehicle = VehicleImpl.Builder.newInstance(String.valueOf(vehicle.getInt("id")))
                 .setType(vehicleType)
-                .setStartLocation(Location.newInstance(0,0)).setEndLocation(Location.newInstance(20,20))
-                .addSkill("loading bridge").addSkill("electric drill")
+                .setStartLocation(Location.newInstance(vehicle.getString("start"))).setEndLocation(Location.newInstance(vehicle.getString("end")))
+                //.addSkill("loading bridge").addSkill("electric drill")
                 .build();
         vrpBuilder.addVehicle(new_vehicle);
     }
 
+    private static void createSolution() {
 
-    private static Object findBestSolution() {
-        final int WEIGHT_INDEX = 0;
-        VehicleTypeImpl.Builder vehicleTypeBuilder = VehicleTypeImpl.Builder.newInstance("vehicleType").addCapacityDimension(WEIGHT_INDEX,2);
-        VehicleType vehicleType = vehicleTypeBuilder.build();
-        /*
-         * get a vehicle-builder and build a vehicle located at (10,10) with type "vehicleType"
-         */
-        VehicleImpl.Builder vehicleBuilder = VehicleImpl.Builder.newInstance("vehicle");
-        vehicleBuilder.setStartLocation(Location.newInstance(10, 10));
-        vehicleBuilder.setType(vehicleType);
-        VehicleImpl vehicle = vehicleBuilder.build();
-
-        /*
-         * build services with id 1...4 at the required locations, each with a capacity-demand of 1.
-         * Note, that the builder allows chaining which makes building quite handy
-         */
-
-        Service service1 = Service.Builder.newInstance("1").addSizeDimension(WEIGHT_INDEX,1).setLocation(Location.newInstance(5, 7)).build();
-        Service service2 = Service.Builder.newInstance("2").addSizeDimension(WEIGHT_INDEX,1).setLocation(Location.newInstance(5, 13)).build();
-        Service service3 = Service.Builder.newInstance("3").addSizeDimension(WEIGHT_INDEX,1).setLocation(Location.newInstance(15, 7)).build();
-        Service service4 = Service.Builder.newInstance("4").addSizeDimension(WEIGHT_INDEX,1).setLocation(Location.newInstance(15, 13)).build();
-
-        /*
-         * again define a builder to build the VehicleRoutingProblem
-         */
-        VehicleRoutingProblem.Builder vrpBuilder = VehicleRoutingProblem.Builder.newInstance();
-        vrpBuilder.addVehicle(vehicle);
-        vrpBuilder.addJob(service1).addJob(service2).addJob(service3).addJob(service4);
-
-        /*
-         * build the problem
-         * by default, the problem is specified such that FleetSize is INFINITE, i.e. an infinite number of
-         * the defined vehicles can be used to solve the problem
-         * by default, transport costs are computed as Euclidean distances
-         */
-
-        VehicleRoutingProblem problem = vrpBuilder.build();
-
-        /*
-         * get the algorithm out-of-the-box.
-         */
+        VehicleRoutingTransportCosts costMatrix = costMatrixBuilder.build();
+        vrpBuilder.setFleetSize(VehicleRoutingProblem.FleetSize.FINITE).setRoutingCost(costMatrix);
+        VehicleRoutingProblem problem =  vrpBuilder.build();
         VehicleRoutingAlgorithm algorithm = Jsprit.createAlgorithm(problem);
-
-        /*
-         * and search a solution which returns a collection of solutions (here only one solution is constructed)
-         */
-
+        // search solutions
         Collection<VehicleRoutingProblemSolution> solutions = algorithm.searchSolutions();
-
-        /*
-         * use the static helper-method in the utility class Solutions to get the best solution (in terms of least costs)
-         */
-
+        // get best
         VehicleRoutingProblemSolution bestSolution = Solutions.bestOf(solutions);
 
-        return bestSolution;
 
-        //SolutionPrinter.print(problem, bestSolution, SolutionPrinter.Print.CONCISE);
-        //SolutionPrinter.print(problem, bestSolution, SolutionPrinter.Print.VERBOSE);
-
-        //System.out.println(problem);
-        //System.out.println(bestSolution);
-
-        //Gson gson = new Gson();
-        //gson.toJson(1);
+        SolutionPrinter.print(problem, bestSolution, SolutionPrinter.Print.CONCISE);
+        SolutionPrinter.print(problem, bestSolution, SolutionPrinter.Print.VERBOSE);
+        // define an algorithm out of the box - this creates a large neighborhood search algorithm
 
 
 
-        //User user = new Gson().fromJson(request.body(), User.class);
-        // userService.addUser(user);
+
     }
 
 
